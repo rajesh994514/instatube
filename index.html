@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>InstaTube – Download YouTube & Instagram Videos</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#0a0a0f; --surface:#111118; --surface2:#18181f;
+    --border:rgba(255,255,255,0.07);
+    --yt:#ff2244; --ig:#e040fb; --accent:#ffdd44;
+    --text:#f0f0f5; --muted:#7070a0; --green:#00e5a0; --blue:#4482ff;
+    --radius:16px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+  .ambient{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+  .blob{position:absolute;border-radius:50%;filter:blur(120px);opacity:.18;animation:float 8s ease-in-out infinite;}
+  .blob1{width:600px;height:600px;background:var(--yt);top:-200px;left:-150px;}
+  .blob2{width:500px;height:500px;background:var(--ig);bottom:-200px;right:-100px;animation-delay:-3s;}
+  .blob3{width:300px;height:300px;background:var(--accent);top:40%;left:50%;animation-delay:-5s;opacity:.10;}
+  @keyframes float{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-30px) scale(1.05);}}
+
+  .page{position:relative;z-index:1;}
+
+  nav{display:flex;align-items:center;justify-content:space-between;padding:20px 48px;
+    border-bottom:1px solid var(--border);backdrop-filter:blur(20px);
+    background:rgba(10,10,15,.6);position:sticky;top:0;z-index:100;}
+  .logo{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;display:flex;align-items:center;text-decoration:none;}
+  .logo .yt{color:var(--yt);} .logo .ig{color:var(--ig);}
+  .nav-links{display:flex;gap:32px;list-style:none;}
+  .nav-links a{color:var(--muted);text-decoration:none;font-size:.9rem;font-weight:500;transition:color .2s;}
+  .nav-links a:hover{color:var(--text);}
+
+  .hero{text-align:center;padding:90px 24px 50px;max-width:860px;margin:0 auto;}
+  .badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);
+    border:1px solid var(--border);border-radius:50px;padding:6px 16px;
+    font-size:.78rem;color:var(--muted);font-weight:500;margin-bottom:28px;
+    letter-spacing:.04em;text-transform:uppercase;}
+  .badge-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  h1{font-family:'Syne',sans-serif;font-size:clamp(2.4rem,6vw,4rem);font-weight:800;
+    line-height:1.08;letter-spacing:-.03em;margin-bottom:18px;}
+  h1 em{font-style:normal;}
+  .highlight-yt{color:var(--yt);}
+  .highlight-ig{background:linear-gradient(90deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .hero-sub{font-size:1.05rem;color:var(--muted);max-width:500px;margin:0 auto 44px;line-height:1.6;font-weight:300;}
+
+  /* ── DOWNLOAD BOX ── */
+  .download-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;
+    padding:32px;max-width:780px;margin:0 auto 20px;box-shadow:0 30px 80px rgba(0,0,0,.5);}
+
+  .platform-tabs{display:flex;gap:8px;margin-bottom:24px;}
+  .ptab{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;
+    padding:12px 16px;border-radius:12px;border:1.5px solid var(--border);
+    background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;
+    font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s;}
+  .ptab svg{width:18px;height:18px;}
+  .ptab.active-yt{background:rgba(255,34,68,.15);border-color:var(--yt);color:var(--yt);}
+  .ptab.active-ig{background:rgba(224,64,251,.12);border-color:var(--ig);color:var(--ig);}
+  .ptab:not(.active-yt):not(.active-ig):hover{border-color:rgba(255,255,255,.2);color:var(--text);}
+
+  .input-row{display:flex;gap:10px;margin-bottom:20px;}
+  .url-input{flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;
+    padding:14px 18px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.95rem;
+    outline:none;transition:border-color .2s;}
+  .url-input::placeholder{color:var(--muted);}
+  .url-input:focus{border-color:rgba(255,255,255,.25);}
+  .fetch-btn{background:var(--yt);color:#fff;border:none;border-radius:12px;padding:14px 28px;
+    font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;
+    transition:all .2s;white-space:nowrap;}
+  .fetch-btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,34,68,.35);}
+  .fetch-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .fetch-btn.ig-mode{background:linear-gradient(135deg,#f09433 0%,#dc2743 50%,#bc1888 100%);}
+
+  /* Info card */
+  .info-card{display:none;margin-bottom:20px;background:var(--surface2);border:1px solid var(--border);
+    border-radius:14px;padding:16px 18px;align-items:center;gap:14px;}
+  .info-card.show{display:flex;}
+  .info-thumb{width:80px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,.06);}
+  .info-title{font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;}
+  .info-meta{font-size:.78rem;color:var(--muted);}
+
+  /* Section label */
+  .sec-label{font-size:.78rem;color:var(--muted);font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;margin-bottom:10px;}
+
+  /* Resolution grid */
+  .res-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
+  .res-chip{padding:7px 16px;border-radius:50px;border:1.5px solid var(--border);
+    background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;
+    font-size:.82rem;font-weight:500;cursor:pointer;transition:all .2s;}
+  .res-chip:hover{border-color:rgba(255,255,255,.3);color:var(--text);}
+  .res-chip.selected{background:var(--accent);color:#0a0a0f;border-color:var(--accent);font-weight:700;}
+  .res-chip.audio-chip.selected{background:var(--blue);border-color:var(--blue);color:#fff;}
+
+  /* Divider */
+  .res-divider{width:100%;display:flex;align-items:center;gap:10px;margin:6px 0 10px;}
+  .res-divider span{font-size:.72rem;color:var(--muted);white-space:nowrap;letter-spacing:.06em;text-transform:uppercase;}
+  .res-divider::before,.res-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+  /* Format row */
+  .format-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .format-group{display:flex;gap:8px;}
+  .fmt-btn{padding:7px 18px;border-radius:50px;border:1.5px solid var(--border);
+    background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;
+    font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;}
+  .fmt-btn:hover{border-color:rgba(255,255,255,.25);color:var(--text);}
+  .fmt-btn.selected{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);color:var(--text);}
+
+  /* Error */
+  .error-msg{display:none;margin-top:14px;background:rgba(255,34,68,.1);
+    border:1px solid rgba(255,34,68,.3);border-radius:10px;padding:12px 16px;
+    font-size:.85rem;color:#ff6680;line-height:1.5;}
+  .error-msg.show{display:block;}
+
+  /* Progress */
+  .progress-wrap{display:none;margin-top:20px;}
+  .progress-wrap.show{display:block;}
+  .progress-bar-track{height:8px;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden;margin-bottom:8px;}
+  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--yt),var(--accent),var(--green));
+    background-size:200% 100%;border-radius:99px;width:0%;transition:width .4s ease;}
+  .progress-bar-fill.audio{background:linear-gradient(90deg,var(--blue),var(--green));}
+  .progress-row{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted);}
+
+  /* Download button */
+  .dl-btn{width:100%;margin-top:16px;background:var(--green);color:#0a0a0f;border:none;
+    border-radius:12px;padding:15px 28px;font-family:'Syne',sans-serif;font-size:1rem;
+    font-weight:700;cursor:pointer;transition:all .2s;display:none;
+    align-items:center;justify-content:center;gap:8px;}
+  .dl-btn.show{display:flex;}
+  .dl-btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px);box-shadow:0 8px 28px rgba(0,229,160,.3);}
+  .dl-btn:disabled{opacity:.6;cursor:not-allowed;}
+  .dl-btn.audio-mode{background:var(--blue);color:#fff;}
+  .dl-btn.audio-mode:hover:not(:disabled){box-shadow:0 8px 28px rgba(68,130,255,.3);}
+
+  /* Features */
+  .features{padding:80px 48px;max-width:1100px;margin:0 auto;}
+  .section-label{font-size:.75rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:12px;text-align:center;}
+  .section-title{font-family:'Syne',sans-serif;font-size:clamp(1.8rem,3vw,2.6rem);
+    font-weight:800;text-align:center;letter-spacing:-.02em;margin-bottom:56px;}
+  .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;}
+  .feat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:28px;transition:border-color .2s,transform .2s;}
+  .feat-card:hover{border-color:rgba(255,255,255,.15);transform:translateY(-3px);}
+  .feat-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;
+    justify-content:center;font-size:1.5rem;margin-bottom:18px;}
+  .feat-icon.red{background:rgba(255,34,68,.15);} .feat-icon.purple{background:rgba(224,64,251,.15);}
+  .feat-icon.yellow{background:rgba(255,221,68,.15);} .feat-icon.green{background:rgba(0,229,160,.15);}
+  .feat-icon.blue{background:rgba(68,130,255,.15);} .feat-icon.orange{background:rgba(255,140,0,.15);}
+  .feat-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:8px;}
+  .feat-desc{font-size:.875rem;color:var(--muted);line-height:1.6;}
+
+  .stats-section{padding:60px 48px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface);}
+  .stats-inner{max-width:900px;margin:0 auto;display:flex;justify-content:space-around;flex-wrap:wrap;gap:32px;text-align:center;}
+  .stat-num{font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;letter-spacing:-.04em;
+    background:linear-gradient(135deg,#fff 0%,rgba(255,255,255,.5) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .stat-label{font-size:.85rem;color:var(--muted);margin-top:4px;}
+
+  .how-section{padding:80px 48px;max-width:1000px;margin:0 auto;}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
+  .step{padding:32px;position:relative;}
+  .step:not(:last-child)::after{content:'→';position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:1.4rem;color:var(--border);}
+  .step-num{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;line-height:1;color:rgba(255,255,255,.06);margin-bottom:12px;}
+  .step-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:8px;}
+  .step-desc{font-size:.875rem;color:var(--muted);line-height:1.6;}
+
+  footer{border-top:1px solid var(--border);padding:40px 48px;display:flex;
+    justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;
+    color:var(--muted);font-size:.82rem;}
+  .footer-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;}
+  .footer-links{display:flex;gap:24px;}
+  .footer-links a{color:var(--muted);text-decoration:none;transition:color .2s;}
+  .footer-links a:hover{color:var(--text);}
+  .disclaimer{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;
+    padding:12px 20px;font-size:.78rem;color:var(--muted);max-width:780px;
+    margin:0 auto 16px;text-align:center;line-height:1.5;}
+
+  @media(max-width:640px){
+    nav{padding:16px 20px;} .nav-links{display:none;}
+    .hero{padding:60px 20px 40px;}
+    .download-box{padding:20px;border-radius:18px;}
+    .input-row{flex-direction:column;}
+    .features,.how-section{padding:60px 20px;}
+    footer{padding:32px 20px;flex-direction:column;align-items:flex-start;}
+    .step::after{display:none;} .stats-section{padding:40px 20px;}
+  }
+</style>
+</head>
+<body>
+<div class="ambient">
+  <div class="blob blob1"></div><div class="blob blob2"></div><div class="blob blob3"></div>
+</div>
+
+<div class="page">
+  <nav>
+    <a class="logo" href="#"><span class="yt">Insta</span><span class="ig">Tube</span></a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How it works</a></li>
+    </ul>
+  </nav>
+
+  <section class="hero">
+    <div class="badge"><span class="badge-dot"></span>Fast · Free · No Login Required</div>
+    <h1>Download<br/><em class="highlight-yt">YouTube</em> &amp; <em class="highlight-ig">Instagram</em><br/>Videos Instantly</h1>
+    <p class="hero-sub">Grab any video in up to 4K quality in seconds. No watermarks, no signup — just lightning-fast downloads.</p>
+  </section>
+
+  <!-- DOWNLOAD BOX -->
+  <div style="max-width:780px;margin:0 auto;padding:0 24px 80px;">
+    <div class="download-box">
+
+      <!-- Platform Tabs -->
+      <div class="platform-tabs">
+        <button class="ptab active-yt" id="tabYT" onclick="switchPlatform('yt')">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          YouTube
+        </button>
+        <button class="ptab" id="tabIG" onclick="switchPlatform('ig')">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>
+          Instagram
+        </button>
+      </div>
+
+      <!-- URL input -->
+      <div class="input-row">
+        <input type="url" class="url-input" id="urlInput" placeholder="Paste YouTube video URL here…"/>
+        <button class="fetch-btn" id="fetchBtn" onclick="handleFetch()">Fetch Video</button>
+      </div>
+
+      <!-- Info card -->
+      <div class="info-card" id="infoCard">
+        <img class="info-thumb" id="infoThumb" src="" alt="thumb"/>
+        <div style="min-width:0;flex:1">
+          <div class="info-title" id="infoTitle"></div>
+          <div class="info-meta" id="infoMeta"></div>
+        </div>
+      </div>
+
+      <!-- Resolution Section -->
+      <div id="resSection" style="margin-top:20px;">
+        <div class="sec-label">🎬 Video Quality</div>
+        <div class="res-grid" id="videoResGrid">
+          <!-- filled dynamically -->
+        </div>
+
+        <div class="res-divider"><span>🎵 Music / Audio Quality</span></div>
+        <div class="res-grid" id="audioResGrid">
+          <button class="res-chip audio-chip" onclick="selectRes(this, true)">Audio 128kbps</button>
+          <button class="res-chip audio-chip" onclick="selectRes(this, true)">Audio 192kbps</button>
+          <button class="res-chip audio-chip" onclick="selectRes(this, true)">Audio 320kbps</button>
+        </div>
+      </div>
+
+      <!-- Format -->
+      <div class="format-row">
+        <div>
+          <div class="sec-label" style="margin-bottom:8px;">Format</div>
+          <div class="format-group" id="fmtGroup">
+            <button class="fmt-btn selected" onclick="selectFmt(this)">MP4</button>
+            <button class="fmt-btn" onclick="selectFmt(this)">WEBM</button>
+            <button class="fmt-btn" onclick="selectFmt(this)">MKV</button>
+            <button class="fmt-btn" onclick="selectFmt(this)">MP3</button>
+            <button class="fmt-btn" onclick="selectFmt(this)">M4A</button>
+          </div>
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:6px;">
+          <span style="color:var(--green);">⚡</span> Turbo · 5× fragment speed
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div class="error-msg" id="errorMsg"></div>
+
+      <!-- Progress -->
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-row" style="margin-bottom:8px;">
+          <span id="progressLabel">Starting…</span>
+          <span id="progressPct" style="color:var(--text);font-weight:600;">0%</span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-row" style="margin-top:6px;">
+          <span id="progressSpeed"></span>
+          <span id="progressEta"></span>
+        </div>
+      </div>
+
+      <!-- Download button -->
+      <button class="dl-btn" id="dlBtn" onclick="triggerDownload()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v16M6 14l6 6 6-6"/><path d="M3 20h18"/></svg>
+        Download Video
+      </button>
+    </div>
+
+    <div class="disclaimer">⚠️ InstaTube is for personal use only. Please only download content you have the right to save. Respect copyright laws and the terms of service of each platform.</div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-section">
+    <div class="stats-inner">
+      <div><div class="stat-num">50M+</div><div class="stat-label">Videos Downloaded</div></div>
+      <div><div class="stat-num">4K</div><div class="stat-label">Max Resolution</div></div>
+      <div><div class="stat-num">320kbps</div><div class="stat-label">Max Audio Quality</div></div>
+      <div><div class="stat-num">99.9%</div><div class="stat-label">Uptime</div></div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="section-label">Why InstaTube</div>
+    <div class="section-title">Everything you need, nothing you don't</div>
+    <div class="features-grid">
+      <div class="feat-card"><div class="feat-icon red">⚡</div><div class="feat-title">Turbo Speed</div><div class="feat-desc">5× concurrent fragment downloads with zero throttling for the fastest possible speed.</div></div>
+      <div class="feat-card"><div class="feat-icon purple">🎞️</div><div class="feat-title">144p → 4K UHD</div><div class="feat-desc">All resolutions available. Always get the exact quality you want from the video.</div></div>
+      <div class="feat-card"><div class="feat-icon blue">🎵</div><div class="feat-title">320kbps Audio</div><div class="feat-desc">Extract studio-quality MP3 audio at 128, 192 or 320kbps. Perfect for music.</div></div>
+      <div class="feat-card"><div class="feat-icon green">🔒</div><div class="feat-title">Platform Validation</div><div class="feat-desc">YouTube URLs only work on the YouTube tab. Instagram URLs only on Instagram. No mix-ups.</div></div>
+      <div class="feat-card"><div class="feat-icon yellow">📱</div><div class="feat-title">Works Everywhere</div><div class="feat-desc">Optimized for mobile, tablet and desktop. Any device, any browser.</div></div>
+      <div class="feat-card"><div class="feat-icon orange">🖼️</div><div class="feat-title">No Watermarks</div><div class="feat-desc">Clean original files — no logos, no watermarks, no re-encoding artifacts.</div></div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-section" id="how">
+    <div class="section-label">Simple Process</div>
+    <div class="section-title">3 steps to download</div>
+    <div class="steps">
+      <div class="step"><div class="step-num">01</div><div class="step-title">Paste the URL</div><div class="step-desc">Copy the YouTube or Instagram video link and paste it into the correct tab.</div></div>
+      <div class="step"><div class="step-num">02</div><div class="step-title">Pick Quality</div><div class="step-desc">Choose video resolution (144p–4K) or audio quality (128–320kbps) and format.</div></div>
+      <div class="step"><div class="step-num">03</div><div class="step-title">Download!</div><div class="step-desc">Hit Download and your file saves at full speed directly to your device.</div></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-logo"><span style="color:var(--yt)">Insta</span><span style="color:var(--ig)">Tube</span></div>
+    <div class="footer-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="#">DMCA</a><a href="#">Contact</a></div>
+    <div>© 2026 InstaTube. Personal use only.</div>
+  </footer>
+</div>
+
+<script>
+// Auto-detects: localhost = dev mode, anything else = Railway/production
+const API_BASE = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  ? "http://localhost:5000/api"
+  : window.location.origin + "/api";
+let currentPlatform = 'yt';
+let selectedRes = '720p HD';
+let selectedFmt = 'MP4';
+let isAudioMode  = false;
+let currentJobId = null;
+let videoInfo    = null;
+
+// ── Platform switch ──
+function switchPlatform(p) {
+  currentPlatform = p;
+  document.getElementById('tabYT').className = 'ptab' + (p==='yt' ? ' active-yt' : '');
+  document.getElementById('tabIG').className = 'ptab' + (p==='ig' ? ' active-ig' : '');
+  const fb = document.getElementById('fetchBtn');
+  fb.className = 'fetch-btn' + (p==='ig' ? ' ig-mode' : '');
+  document.getElementById('urlInput').placeholder =
+    p==='yt' ? 'Paste YouTube video URL here…' : 'Paste Instagram reel/post URL here…';
+  reset();
+}
+
+function selectRes(el, audio=false) {
+  document.querySelectorAll('.res-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedRes  = el.textContent.trim();
+  isAudioMode  = audio;
+  // Auto-switch format
+  const fmtGroup = document.getElementById('fmtGroup');
+  if (audio) {
+    document.querySelectorAll('.fmt-btn').forEach(b => {
+      b.classList.remove('selected');
+      if (b.textContent === 'MP3') b.classList.add('selected');
+    });
+    selectedFmt = 'MP3';
+  } else {
+    document.querySelectorAll('.fmt-btn').forEach(b => {
+      b.classList.remove('selected');
+      if (b.textContent === 'MP4') b.classList.add('selected');
+    });
+    selectedFmt = 'MP4';
+  }
+  // Update download button style
+  const dlBtn = document.getElementById('dlBtn');
+  if (audio) {
+    dlBtn.className = dlBtn.className.replace('audio-mode','') + ' audio-mode';
+    dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v16M6 14l6 6 6-6"/><path d="M3 20h18"/></svg> Download Audio';
+  } else {
+    dlBtn.className = dlBtn.className.replace(' audio-mode','');
+    dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v16M6 14l6 6 6-6"/><path d="M3 20h18"/></svg> Download Video';
+  }
+}
+
+function selectFmt(el) {
+  document.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedFmt = el.textContent.trim();
+}
+
+function reset() {
+  document.getElementById('infoCard').classList.remove('show');
+  document.getElementById('progressWrap').classList.remove('show');
+  document.getElementById('dlBtn').classList.remove('show');
+  document.getElementById('errorMsg').classList.remove('show');
+  document.getElementById('videoResGrid').innerHTML = '';
+  currentJobId = null; videoInfo = null; isAudioMode = false;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+// ── Fetch video info ──
+async function handleFetch() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) {
+    document.getElementById('urlInput').style.borderColor='var(--yt)';
+    setTimeout(()=>document.getElementById('urlInput').style.borderColor='',800);
+    return;
+  }
+  reset();
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled=true; btn.textContent='Fetching…';
+
+  try {
+    const res  = await fetch(`${API_BASE}/info?url=${encodeURIComponent(url)}&platform=${currentPlatform}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch');
+
+    videoInfo = data;
+    document.getElementById('infoThumb').src    = data.thumbnail || '';
+    document.getElementById('infoTitle').textContent = data.title;
+    document.getElementById('infoMeta').textContent  =
+      [data.uploader, data.duration].filter(Boolean).join(' · ');
+    document.getElementById('infoCard').classList.add('show');
+
+    // Build video resolution chips
+    const videoGrid = document.getElementById('videoResGrid');
+    videoGrid.innerHTML = '';
+    const videoRes = (data.resolutions||[]).filter(r=>!r.startsWith('Audio'));
+    const audioRes = (data.resolutions||[]).filter(r=>r.startsWith('Audio'));
+
+    let firstSelected = false;
+    videoRes.forEach(r => {
+      const btn = document.createElement('button');
+      btn.className = 'res-chip' + (!firstSelected ? ' selected' : '');
+      btn.textContent = r;
+      btn.onclick = () => selectRes(btn, false);
+      videoGrid.appendChild(btn);
+      if (!firstSelected) { selectedRes = r; firstSelected = true; }
+    });
+
+    // Update audio chips (always show all 3)
+    document.querySelectorAll('.audio-chip').forEach(c => c.classList.remove('selected'));
+
+    // Show download button
+    const dlBtn = document.getElementById('dlBtn');
+    dlBtn.className = 'dl-btn show';
+    dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v16M6 14l6 6 6-6"/><path d="M3 20h18"/></svg> Download Video';
+    dlBtn.disabled = false;
+
+  } catch(err) {
+    showError(err.message);
+  } finally {
+    btn.disabled=false; btn.textContent='Fetch Video';
+  }
+}
+
+// ── Start download ──
+async function triggerDownload() {
+  if (!videoInfo) return;
+  const url = document.getElementById('urlInput').value.trim();
+  const dlBtn = document.getElementById('dlBtn');
+  dlBtn.disabled=true; dlBtn.innerHTML='⏳ Starting…';
+  document.getElementById('progressWrap').classList.add('show');
+  document.getElementById('progressFill').style.width='0%';
+  document.getElementById('progressPct').textContent='0%';
+  document.getElementById('progressLabel').textContent='Queueing download…';
+  document.getElementById('errorMsg').classList.remove('show');
+
+  // Audio mode: force MP3 format
+  const fmt = isAudioMode ? 'MP3' : selectedFmt;
+
+  try {
+    const res  = await fetch(`${API_BASE}/download`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url, resolution:selectedRes, format:fmt, platform:currentPlatform})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Download start failed');
+    currentJobId = data.job_id;
+    pollProgress(currentJobId);
+  } catch(err) {
+    showError(err.message);
+    dlBtn.disabled=false;
+    dlBtn.innerHTML = isAudioMode ? '⬇️ Download Audio' : '⬇️ Download Video';
+  }
+}
+
+// ── SSE Progress ──
+function pollProgress(jobId) {
+  const fill = document.getElementById('progressFill');
+  if (isAudioMode) fill.classList.add('audio'); else fill.classList.remove('audio');
+
+  const evtSrc = new EventSource(`${API_BASE}/progress/${jobId}`);
+  evtSrc.onmessage = e => {
+    const info = JSON.parse(e.data);
+    const pct  = Math.round(info.percent||0);
+    fill.style.width = pct+'%';
+    document.getElementById('progressPct').textContent = pct+'%';
+    document.getElementById('progressLabel').textContent =
+      info.status==='processing' ? '🔄 Merging / Converting…' :
+      info.status==='done'       ? '✅ Ready!' :
+      info.status==='error'      ? '❌ Error' : '⬇️ Downloading…';
+    if (info.speed) document.getElementById('progressSpeed').textContent = '⚡ '+info.speed;
+    if (info.eta)   document.getElementById('progressEta').textContent   = 'ETA: '+info.eta;
+
+    if (info.status==='done') {
+      evtSrc.close();
+      const a = document.createElement('a');
+      a.href = `${API_BASE}/file/${jobId}`; a.click();
+      const dlBtn = document.getElementById('dlBtn');
+      dlBtn.disabled=false;
+      dlBtn.innerHTML = '⬇️ Download Again';
+    } else if (info.status==='error') {
+      evtSrc.close();
+      showError(info.error||'Download failed. Please try again.');
+      const dlBtn = document.getElementById('dlBtn');
+      dlBtn.disabled=false;
+      dlBtn.innerHTML = '🔄 Retry';
+    }
+  };
+  evtSrc.onerror = () => { evtSrc.close(); showError('Lost connection to server. Is the backend running?'); };
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key==='Enter') handleFetch();
+  });
+});
+</script>
+</body>
+</html>
