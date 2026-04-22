@@ -2,7 +2,7 @@
 InstaTube – Works for EVERY user, no personal cookies needed
 =============================================================
 YouTube:   cobalt.tools API (free, no cookies, no bot detection)
-Instagram: cobalt.tools API (free, no cookies, no bot detection)  
+Instagram: cobalt.tools API (free, no cookies, no bot detection)
 Fallback:  yt-dlp with multiple client rotation
 
 cobalt.tools is an open-source downloader API used by millions.
@@ -101,23 +101,10 @@ COBALT_INSTANCES = [
     "https://cobalt.api.lostdusty.com",
 ]
 
-def cobalt_get_info(url):
-    """Get video info using yt-dlp (for metadata only, fast)."""
-    opts = {
-        "quiet": True, "no_warnings": True, "skip_download": True,
-        "nocheckcertificate": True,
-        "http_headers": {"User-Agent": random_ua()},
-        "extractor_args": {"youtube": {"player_client": ["android_vr","ios","android"]}},
-        "socket_timeout": 30,
-    }
-    if cookies_ready(): opts["cookiefile"] = COOKIE_FILE
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=False)
-
 def cobalt_download(url, quality="720p HD", is_audio_mode=False, audio_quality="192"):
     """
     Download via cobalt.tools API — works for everyone without cookies.
-    Returns: (file_path, title, error)
+    Returns: (download_url, title, error)
     """
     headers = {
         "Accept":       "application/json",
@@ -125,7 +112,6 @@ def cobalt_download(url, quality="720p HD", is_audio_mode=False, audio_quality="
         "User-Agent":   "InstaTube/1.0",
     }
 
-    # Map our quality to cobalt format
     quality_map = {
         "144p":"144","240p":"240","360p":"360","480p":"480",
         "720p HD":"720","1080p FHD":"1080","1440p 2K":"1440","2160p 4K":"2160",
@@ -145,9 +131,7 @@ def cobalt_download(url, quality="720p HD", is_audio_mode=False, audio_quality="
 
     for instance in COBALT_INSTANCES:
         try:
-            resp = requests.post(
-                instance, json=payload, headers=headers, timeout=20
-            )
+            resp = requests.post(instance, json=payload, headers=headers, timeout=20)
             if resp.status_code != 200:
                 continue
             data = resp.json()
@@ -157,14 +141,12 @@ def cobalt_download(url, quality="720p HD", is_audio_mode=False, audio_quality="
                 last_error = data.get("error", {}).get("code", "Unknown cobalt error")
                 continue
 
-            # Direct download URL
             if status in ("redirect", "stream", "tunnel"):
                 download_url = data.get("url")
                 if not download_url:
                     continue
                 return download_url, data.get("filename","video"), None
 
-            # Picker (multiple streams — pick best)
             if status == "picker":
                 picks = data.get("picker", [])
                 if picks:
@@ -247,6 +229,7 @@ def build_resolutions(formats):
     if not labels: labels = ["1080p FHD","720p HD","480p","360p","144p"]
     return labels + ["Audio 128kbps","Audio 192kbps","Audio 320kbps"]
 
+
 # ─────────────────────────────────────────────
 # 1. GET /api/info
 # ─────────────────────────────────────────────
@@ -263,7 +246,6 @@ def get_info():
     if platform == "ig" and detected != "instagram":
         return jsonify({"error":"❌ Not an Instagram URL. Switch to the YouTube tab!"}), 400
 
-    # Try yt-dlp for metadata (fast, just needs info not download)
     try:
         opts = ytdlp_opts(platform=detected, extra={"skip_download":True})
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -280,8 +262,6 @@ def get_info():
         })
     except Exception as e:
         msg = str(e)
-        # Even if metadata fails, still allow download attempt via cobalt
-        # Return basic info so user can still try downloading
         if "Sign in" in msg or "bot" in msg.lower() or "403" in msg:
             return jsonify({
                 "title":       "Video (click Download to fetch)",
