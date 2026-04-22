@@ -508,40 +508,61 @@ async function triggerDownload() {
   }
 }
 
-// ── SSE Progress ──
+// ── Polling Progress (works on Railway / any reverse proxy) ──
 function pollProgress(jobId) {
   const fill = document.getElementById('progressFill');
   if (isAudioMode) fill.classList.add('audio'); else fill.classList.remove('audio');
 
-  const evtSrc = new EventSource(`${API_BASE}/progress/${jobId}`);
-  evtSrc.onmessage = e => {
-    const info = JSON.parse(e.data);
-    const pct  = Math.round(info.percent||0);
-    fill.style.width = pct+'%';
-    document.getElementById('progressPct').textContent = pct+'%';
-    document.getElementById('progressLabel').textContent =
-      info.status==='processing' ? '🔄 Merging / Converting…' :
-      info.status==='done'       ? '✅ Ready!' :
-      info.status==='error'      ? '❌ Error' : '⬇️ Downloading…';
-    if (info.speed) document.getElementById('progressSpeed').textContent = '⚡ '+info.speed;
-    if (info.eta)   document.getElementById('progressEta').textContent   = 'ETA: '+info.eta;
+  let errorCount = 0;
 
-    if (info.status==='done') {
-      evtSrc.close();
-      const a = document.createElement('a');
-      a.href = `${API_BASE}/file/${jobId}`; a.click();
-      const dlBtn = document.getElementById('dlBtn');
-      dlBtn.disabled=false;
-      dlBtn.innerHTML = '⬇️ Download Again';
-    } else if (info.status==='error') {
-      evtSrc.close();
-      showError(info.error||'Download failed. Please try again.');
-      const dlBtn = document.getElementById('dlBtn');
-      dlBtn.disabled=false;
-      dlBtn.innerHTML = '🔄 Retry';
+  const interval = setInterval(async () => {
+    try {
+      const res  = await fetch(`${API_BASE}/progress/${jobId}`);
+      const info = await res.json();
+
+      const pct = Math.round(info.percent || 0);
+      fill.style.width = pct + '%';
+      document.getElementById('progressPct').textContent = pct + '%';
+      document.getElementById('progressLabel').textContent =
+        info.status === 'processing' ? '🔄 Merging / Converting…' :
+        info.status === 'done'       ? '✅ Ready!' :
+        info.status === 'error'      ? '❌ Error' :
+        info.status === 'queued'     ? '⏳ Queued…' : '⬇️ Downloading…';
+
+      if (info.speed) document.getElementById('progressSpeed').textContent = '⚡ ' + info.speed;
+      if (info.eta)   document.getElementById('progressEta').textContent   = 'ETA: ' + info.eta;
+
+      if (info.status === 'done') {
+        clearInterval(interval);
+        // Trigger file download
+        const a = document.createElement('a');
+        a.href = `${API_BASE}/file/${jobId}`;
+        a.click();
+        const dlBtn = document.getElementById('dlBtn');
+        dlBtn.disabled = false;
+        dlBtn.innerHTML = '⬇️ Download Again';
+
+      } else if (info.status === 'error') {
+        clearInterval(interval);
+        showError(info.error || 'Download failed. Please try again.');
+        const dlBtn = document.getElementById('dlBtn');
+        dlBtn.disabled = false;
+        dlBtn.innerHTML = '🔄 Retry';
+      }
+
+      errorCount = 0; // reset on success
+
+    } catch (err) {
+      errorCount++;
+      if (errorCount > 10) {
+        clearInterval(interval);
+        showError('Lost connection to server. Please try again.');
+        const dlBtn = document.getElementById('dlBtn');
+        dlBtn.disabled = false;
+        dlBtn.innerHTML = '🔄 Retry';
+      }
     }
-  };
-  evtSrc.onerror = () => { evtSrc.close(); showError('Lost connection to server. Is the backend running?'); };
+  }, 800); // poll every 800ms
 }
 
 document.addEventListener('DOMContentLoaded', () => {
