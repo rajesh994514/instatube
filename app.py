@@ -54,6 +54,11 @@ def detect_platform(url):
 CONTAINER_MAP = {"MP4":"mp4","WEBM":"webm","MKV":"mkv","MP3":"mp3","M4A":"m4a"}
 def is_audio(r): return r.startswith("Audio")
 
+QUALITY_MAP = {
+    "144p":144,"240p":240,"360p":360,"480p":480,
+    "720p HD":720,"1080p FHD":1080,"1440p 2K":1440,"2160p 4K":2160,
+}
+
 USER_AGENTS = [
     "com.google.android.youtube/17.36.4 (Linux; U; Android 12) gzip",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
@@ -266,18 +271,29 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
     progress_store[job_id].update({"status":"downloading","percent":5})
     audio_q = "320" if "320" in resolution else "192" if "192" in resolution else "128"
 
-    # ── Strategy 1: cobalt.tools (best — no ffmpeg needed) ──
+    # ── Strategy 1: cobalt.tools ──
     dl_url, title, err = try_cobalt(url, resolution, audio_only, audio_q)
     if dl_url:
         print(f"✅ cobalt success for {job_id}")
-        ext = "mp3" if audio_only else "mp4"
+        # Detect best extension
+        if audio_only:
+            ext = "mp3"
+        elif ".webm" in dl_url.lower():
+            ext = "webm"
+        else:
+            ext = "mp4"
         download_url(dl_url, job_id, title or "video", ext)
         return
 
     print(f"⚠️  cobalt failed: {err}")
 
-    # ── Strategy 2: yt-dlp with single-file format (NO ffmpeg) ──
-    ydl_fmt = FORMAT_MAP.get(resolution, "best[ext=mp4]/best")
+    # ── Strategy 2: yt-dlp — try multiple formats ──
+    # Try formats in order: single mp4 → any single file → best available
+    formats_to_try = [
+        f"best[height<={QUALITY_MAP.get(resolution,720)}][ext=mp4]/best[height<={QUALITY_MAP.get(resolution,720)}]/best[ext=mp4]/best",
+        "best[ext=mp4]/best",
+        "worst",
+    ]
     out_tpl = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
 
     clients = [
@@ -285,36 +301,41 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
         ["android"], ["mweb"]
     ] if platform == "youtube" else [None]
 
-    for client in clients:
-        try:
-            opts = make_opts(platform=platform, client=client, extra={
-                "format": ydl_fmt,
-                "outtmpl": out_tpl,
-                "progress_hooks": [lambda d: _progress_hook(d,job_id)],
-                # NO postprocessors = NO ffmpeg needed
-                "postprocessors": [],
-                "merge_output_format": None,
-            })
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                title = info.get("title","video")
-
-            fname = next((f for f in os.listdir(DOWNLOAD_DIR) if f.startswith(job_id)), None)
-            if fname:
-                progress_store[job_id].update({
-                    "status":"done","percent":100,
-                    "filename":fname,"title":title
+    for ydl_fmt in formats_to_try:
+        for client in clients:
+            try:
+                opts = make_opts(platform=platform, client=client, extra={
+                    "format": ydl_fmt,
+                    "outtmpl": out_tpl,
+                    "progress_hooks": [lambda d: _progress_hook(d,job_id)],
+                    "postprocessors": [],
+                    "merge_output_format": None,
+                    "abort_on_unavailable_fragments": False,
                 })
-                return
-        except Exception as e:
-            err = str(e)
-            print(f"⚠️  {client}: {err[:100]}")
-            if "private" in err.lower(): break
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    title = info.get("title","video")
+
+                fname = next((f for f in os.listdir(DOWNLOAD_DIR) if f.startswith(job_id)), None)
+                if fname:
+                    progress_store[job_id].update({
+                        "status":"done","percent":100,
+                        "filename":fname,"title":title
+                    })
+                    return
+            except Exception as e:
+                err = str(e)
+                print(f"⚠️  fmt={ydl_fmt} client={client}: {err[:80]}")
+                if "private" in err.lower(): break
+                if "not available" in err.lower(): break
+                continue
+        else:
             continue
+        break
 
     progress_store[job_id].update({
         "status":"error",
-        "error":"❌ Download failed. Please try again in 1 minute."
+        "error":"❌ YouTube download failed. Please try again in 1 minute."
     })
 
 # ── 3. Progress ──
