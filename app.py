@@ -70,16 +70,16 @@ def detect_platform(url):
     return "unknown"
 
 FORMAT_MAP = {
-    "144p":          "bestvideo[height<=144]+bestaudio/best[height<=144]/worst",
-    "240p":          "bestvideo[height<=240]+bestaudio/best[height<=240]",
-    "360p":          "bestvideo[height<=360]+bestaudio/best[height<=360]",
-    "480p":          "bestvideo[height<=480]+bestaudio/best[height<=480]",
-    "720p HD":       "bestvideo[height<=720]+bestaudio/best[height<=720]",
-    "1080p FHD":     "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-    "1440p 2K":      "bestvideo[height<=1440]+bestaudio/best[height<=1440]",
-    "2160p 4K":      "bestvideo[height<=2160]+bestaudio/best[height<=2160]",
-    "Audio 128kbps": "bestaudio[abr<=130]/bestaudio",
-    "Audio 192kbps": "bestaudio[abr<=195]/bestaudio",
+    "144p":          "worstvideo+worstaudio/worst",
+    "240p":          "bestvideo[height<=240]+bestaudio/best[height<=240]/best",
+    "360p":          "bestvideo[height<=360]+bestaudio/best[height<=360]/best",
+    "480p":          "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
+    "720p HD":       "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+    "1080p FHD":     "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+    "1440p 2K":      "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best",
+    "2160p 4K":      "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best",
+    "Audio 128kbps": "bestaudio[abr<=130]/bestaudio/best",
+    "Audio 192kbps": "bestaudio[abr<=195]/bestaudio/best",
     "Audio 320kbps": "bestaudio/best",
 }
 CONTAINER_MAP = {"MP4":"mp4","WEBM":"webm","MKV":"mkv","MP3":"mp3","M4A":"m4a"}
@@ -299,21 +299,34 @@ def _worker(job_id, url, resolution, fmt_ext, ydl_fmt, audio_only, platform):
     # ── Strategy 2: yt-dlp with multiple clients ──
     out_tpl = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
     pps = []
-    if fmt_ext=="mp3" or audio_only:
+    if fmt_ext == "mp3" or audio_only:
         q = "320" if "320" in resolution else "192" if "192" in resolution else "128"
         pps.append({"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":q})
         fmt_ext = "mp3"
-    elif fmt_ext in ("mp4","mkv"):
-        pps.append({"key":"FFmpegVideoConvertor","preferedformat":fmt_ext})
+
+    # Use single file format to avoid needing ffmpeg for merging
+    # This gives slightly lower quality but works without ffmpeg
+    single_fmt = {
+        "144p":      "best[height<=144]/worst",
+        "240p":      "best[height<=240]/worst",
+        "360p":      "best[height<=360]/best",
+        "480p":      "best[height<=480]/best",
+        "720p HD":   "best[height<=720]/best",
+        "1080p FHD": "best[height<=1080]/best",
+        "1440p 2K":  "best[height<=1440]/best",
+        "2160p 4K":  "best[height<=2160]/best",
+    }.get(resolution, "best")
 
     clients = YT_CLIENTS if platform=="youtube" else [None]
     for client in clients:
         try:
+            # First try single-file format (no ffmpeg needed)
             opts = make_ydl_opts(platform=platform, client=client, extra={
-                "format": ydl_fmt, "outtmpl": out_tpl,
+                "format": single_fmt if not audio_only else ydl_fmt,
+                "outtmpl": out_tpl,
                 "progress_hooks": [lambda d: _progress_hook(d,job_id)],
                 "postprocessors": pps,
-                "merge_output_format": fmt_ext if not audio_only and fmt_ext!="mp3" else None,
+                "merge_output_format": None,
             })
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info  = ydl.extract_info(url, download=True)
@@ -330,7 +343,7 @@ def _worker(job_id, url, resolution, fmt_ext, ydl_fmt, audio_only, platform):
             continue
 
     progress_store[job_id].update({"status":"error",
-        "error":"❌ YouTube is blocking all download attempts from this server. Please try again in 2 minutes."})
+        "error":"❌ Download failed. Please try a different video or try again in 1 minute."})
 
 # ── 3. Progress poll ──
 @app.route("/api/progress/<job_id>")
