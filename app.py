@@ -135,8 +135,6 @@ COBALT = [
     "https://api.cobalt.tools",
     "https://cobalt.synzr.space",
     "https://cobalt.api.timelessnesses.me",
-    "https://cobalt-api.hyper.lol",
-    "https://capi.7ms.us",
 ]
 
 def try_cobalt(url, quality, audio_only, audio_q):
@@ -150,10 +148,15 @@ def try_cobalt(url, quality, audio_only, audio_q):
         "downloadMode": "audio" if audio_only else "auto",
         "filenameStyle": "basic",
     }
-    headers = {"Accept":"application/json","Content-Type":"application/json","User-Agent":"InstaTube/1.0"}
+    headers = {
+        "Accept":"application/json",
+        "Content-Type":"application/json",
+        "User-Agent":"InstaTube/1.0"
+    }
     for inst in COBALT:
         try:
-            r = requests.post(inst, json=payload, headers=headers, timeout=12)
+            r = requests.post(inst, json=payload, headers=headers,
+                            timeout=8, verify=False)
             if r.status_code != 200: continue
             d = r.json()
             if d.get("status") in ("redirect","stream","tunnel"):
@@ -163,9 +166,9 @@ def try_cobalt(url, quality, audio_only, audio_q):
                 picks = d.get("picker",[])
                 if picks: return picks[0].get("url"), "video", None
         except Exception as e:
-            print(f"cobalt {inst} failed: {e}")
+            print(f"cobalt {inst}: {str(e)[:50]}")
             continue
-    return None, None, "All cobalt instances failed"
+    return None, None, "cobalt unavailable"
 
 def download_url(dl_url, job_id, title, ext):
     out = os.path.join(DOWNLOAD_DIR, f"{job_id}.{ext}")
@@ -287,12 +290,14 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
 
     print(f"⚠️  cobalt failed: {err}")
 
-    # ── Strategy 2: yt-dlp — try multiple formats ──
-    # Try formats in order: single mp4 → any single file → best available
+    # ── Strategy 2: yt-dlp — simple formats that always work ──
+    height = QUALITY_MAP.get(resolution, 720)
+    # Use simple "best" format — no codec/extension restrictions
+    # This works for ALL YouTube videos including Shorts
     formats_to_try = [
-        f"best[height<={QUALITY_MAP.get(resolution,720)}][ext=mp4]/best[height<={QUALITY_MAP.get(resolution,720)}]/best[ext=mp4]/best",
-        "best[ext=mp4]/best",
-        "worst",
+        f"best[height<={height}]/best",   # best single file up to height
+        "best",                            # absolute best single file
+        "worst",                           # worst quality fallback
     ]
     out_tpl = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
 
