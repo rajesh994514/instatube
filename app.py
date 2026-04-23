@@ -290,20 +290,18 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
 
     print(f"⚠️  cobalt failed: {err}")
 
-    # ── Strategy 2: yt-dlp — simple formats that always work ──
-    height = QUALITY_MAP.get(resolution, 720)
-    # Use simple "best" format — no codec/extension restrictions
-    # This works for ALL YouTube videos including Shorts
+    # ── Strategy 2: yt-dlp ──
+    # Use simplest possible format — no filters at all
+    # YouTube Shorts use portrait orientation so height filters break
     formats_to_try = [
-        f"best[height<={height}]/best",   # best single file up to height
-        "best",                            # absolute best single file
-        "worst",                           # worst quality fallback
+        "best[ext=mp4]/best[ext=webm]/best",
+        "best",
+        "worst[ext=mp4]/worst",
     ]
     out_tpl = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
 
     clients = [
-        ["tv_embedded"], ["android_vr"], ["ios"],
-        ["android"], ["mweb"]
+        ["tv_embedded"], ["android_vr"], ["ios"], ["android"]
     ] if platform == "youtube" else [None]
 
     for ydl_fmt in formats_to_try:
@@ -315,7 +313,6 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
                     "progress_hooks": [lambda d: _progress_hook(d,job_id)],
                     "postprocessors": [],
                     "merge_output_format": None,
-                    "abort_on_unavailable_fragments": False,
                 })
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=True)
@@ -330,13 +327,11 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
                     return
             except Exception as e:
                 err = str(e)
-                print(f"⚠️  fmt={ydl_fmt} client={client}: {err[:80]}")
-                if "private" in err.lower(): break
-                if "not available" in err.lower(): break
+                print(f"⚠️  fmt={ydl_fmt[:20]} client={client}: {err[:60]}")
+                if "private" in err.lower():
+                    progress_store[job_id].update({"status":"error","error":"❌ This video is private."})
+                    return
                 continue
-        else:
-            continue
-        break
 
     progress_store[job_id].update({
         "status":"error",
