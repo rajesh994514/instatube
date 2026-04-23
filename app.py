@@ -19,6 +19,9 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 COOKIE_FILE = os.path.join(os.path.dirname(__file__), "cookies.txt")
 progress_store = {}
 
+def cookies_ok():
+    return os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 100
+
 @app.route("/")
 def index():
     return send_file(os.path.join(os.path.dirname(__file__), "index.html"))
@@ -27,9 +30,18 @@ def index():
 def setup_cookies():
     content = os.environ.get("COOKIES_TXT", "").strip()
     if content:
-        with open(COOKIE_FILE, "w") as f: f.write(content)
-        print("✅ cookies.txt loaded")
+        with open(COOKIE_FILE, "w", encoding="utf-8") as f:
+            f.write(content)
+        size = os.path.getsize(COOKIE_FILE)
+        print(f"✅ cookies.txt written — {size} bytes")
+    elif os.path.exists(COOKIE_FILE):
+        size = os.path.getsize(COOKIE_FILE)
+        print(f"✅ cookies.txt exists — {size} bytes")
+    else:
+        print("⚠️  NO COOKIES — YouTube/Instagram will be blocked!")
 setup_cookies()
+# Print cookie status at startup
+print(f"🍪 Cookie status: {'READY ✅' if cookies_ok() else 'MISSING ❌'}")
 
 # ── Auto-update yt-dlp ──
 def auto_update():
@@ -72,7 +84,6 @@ FORMAT_MAP = {
 }
 CONTAINER_MAP = {"MP4":"mp4","WEBM":"webm","MKV":"mkv","MP3":"mp3","M4A":"m4a"}
 def is_audio(r): return r.startswith("Audio")
-def cookies_ok(): return os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 100
 
 # ─────────────────────────────────────────────
 # cobalt.tools instances
@@ -82,9 +93,7 @@ COBALT_INSTANCES = [
     "https://cobalt.synzr.space",
     "https://cobalt.api.timelessnesses.me",
     "https://cobalt-api.hyper.lol",
-    "https://cobalt.api.lostdusty.com",
     "https://capi.7ms.us",
-    "https://cobalt.lem.ma",
 ]
 
 def try_cobalt(url, quality="720p HD", audio_only=False, audio_q="192"):
