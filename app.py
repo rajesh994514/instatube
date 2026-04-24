@@ -84,9 +84,25 @@ FORMAT_MAP = {
 
 import shutil
 
-# Find node.js path for yt-dlp YouTube extraction
-NODE_PATH = shutil.which("node") or shutil.which("nodejs") or "/usr/bin/node"
-print(f"🟢 Node.js found at: {NODE_PATH}")
+# ── Rotating Proxies (bypasses YouTube IP blocks) ──
+PROXIES = [
+    "http://llpiqyz:338wqkygjs0m@31.59.20.176:6754",
+    "http://llpiqyz:338wqkygjs0m@198.23.239.134:6540",
+    "http://llpiqyz:338wqkygjs0m@45.38.107.97:6014",
+    "http://llpiqyz:338wqkygjs0m@107.172.163.27:6543",
+    "http://llpiqyz:338wqkygjs0m@198.105.121.200:6462",
+    "http://llpiqyz:338wqkygjs0m@216.10.27.159:6837",
+    "http://llpiqyz:338wqkygjs0m@142.111.67.146:5611",
+    "http://llpiqyz:338wqkygjs0m@191.96.254.138:6185",
+    "http://llpiqyz:338wqkygjs0m@31.58.9.4:6077",
+]
+proxy_index = 0
+
+def get_next_proxy():
+    global proxy_index
+    proxy = PROXIES[proxy_index % len(PROXIES)]
+    proxy_index += 1
+    return proxy
 
 def make_opts(platform="youtube", client=None, extra=None):
     opts = {
@@ -109,9 +125,9 @@ def make_opts(platform="youtube", client=None, extra=None):
                 "skip": ["webpage"],
             }
         }
-        # Use PO token provider to bypass YouTube bot detection
-        # This works from any server IP including datacenters
-        opts["extractor_args"]["youtube"]["po_token"] = ["web+https://bgutils.com"]
+        # Use rotating proxy to bypass YouTube datacenter IP blocks
+        opts["proxy"] = get_next_proxy()
+        print(f"🔄 Using proxy: {opts['proxy'].split('@')[1]}")
     elif platform == "instagram":
         opts["http_headers"].update({
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
@@ -162,10 +178,11 @@ def try_cobalt(url, quality, audio_only, audio_q):
         "Content-Type":"application/json",
         "User-Agent":"InstaTube/1.0"
     }
+    proxies = {"http": get_next_proxy(), "https": get_next_proxy()}
     for inst in COBALT:
         try:
             r = requests.post(inst, json=payload, headers=headers,
-                            timeout=8, verify=False)
+                            timeout=8, verify=False, proxies=proxies)
             if r.status_code != 200: continue
             d = r.json()
             if d.get("status") in ("redirect","stream","tunnel"):
