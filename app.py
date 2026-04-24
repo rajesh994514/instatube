@@ -84,25 +84,12 @@ FORMAT_MAP = {
 
 import shutil
 
-# ── Rotating Proxies (bypasses YouTube IP blocks) ──
-PROXIES = [
-    "http://llpiqyz:338wqkygjs0m@31.59.20.176:6754",
-    "http://llpiqyz:338wqkygjs0m@198.23.239.134:6540",
-    "http://llpiqyz:338wqkygjs0m@45.38.107.97:6014",
-    "http://llpiqyz:338wqkygjs0m@107.172.163.27:6543",
-    "http://llpiqyz:338wqkygjs0m@198.105.121.200:6462",
-    "http://llpiqyz:338wqkygjs0m@216.10.27.159:6837",
-    "http://llpiqyz:338wqkygjs0m@142.111.67.146:5611",
-    "http://llpiqyz:338wqkygjs0m@191.96.254.138:6185",
-    "http://llpiqyz:338wqkygjs0m@31.58.9.4:6077",
-]
-proxy_index = 0
+# ── Webshare Rotating Proxy ──
+# Single rotating endpoint — auto-rotates through all 10 proxies
+ROTATING_PROXY = "http://llpiqyz-rotate:338wqkygjs0m@p.webshare.io:80"
 
 def get_next_proxy():
-    global proxy_index
-    proxy = PROXIES[proxy_index % len(PROXIES)]
-    proxy_index += 1
-    return proxy
+    return ROTATING_PROXY
 
 def make_opts(platform="youtube", client=None, extra=None):
     opts = {
@@ -345,7 +332,9 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
                     "postprocessors": [],
                     "merge_output_format": None,
                     "check_formats": False,
-                    "no_check_certificate": True,
+                    # Use proxy for auth but download direct for speed
+                    "geo_bypass": True,
+                    "concurrent_fragment_downloads": 4,
                 })
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=True)
