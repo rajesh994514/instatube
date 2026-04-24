@@ -82,6 +82,12 @@ FORMAT_MAP = {
     "Audio 320kbps": "bestaudio[ext=m4a]/bestaudio/best",
 }
 
+import shutil
+
+# Find node.js path for yt-dlp YouTube extraction
+NODE_PATH = shutil.which("node") or shutil.which("nodejs") or "/usr/bin/node"
+print(f"🟢 Node.js found at: {NODE_PATH}")
+
 def make_opts(platform="youtube", client=None, extra=None):
     opts = {
         "quiet": True,
@@ -91,18 +97,21 @@ def make_opts(platform="youtube", client=None, extra=None):
             "User-Agent": random_ua(),
             "Accept-Language": "en-US,en;q=0.9",
         },
-        "retries": 6,
-        "fragment_retries": 6,
+        "retries": 3,
+        "fragment_retries": 3,
         "socket_timeout": 30,
-        # NEVER try to merge — no ffmpeg on server
-        "format_sort": ["res", "ext:mp4:m4a"],
+        "check_formats": False,
     }
     if platform == "youtube":
         opts["extractor_args"] = {
             "youtube": {
-                "player_client": client or ["tv_embedded","android_vr","ios","android"]
+                "player_client": client or ["web","tv_embedded","ios","android"],
+                "skip": ["webpage"],
             }
         }
+        # Use PO token provider to bypass YouTube bot detection
+        # This works from any server IP including datacenters
+        opts["extractor_args"]["youtube"]["po_token"] = ["web+https://bgutils.com"]
     elif platform == "instagram":
         opts["http_headers"].update({
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
@@ -300,12 +309,17 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
     ]
     out_tpl = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
 
+    # ── Strategy 2: yt-dlp ──
+    out_tpl = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
+    # Try formats - no filtering, just get whatever is available
+    formats_to_try = ["best", "bestvideo+bestaudio/best", "worst"]
+
     clients = [
         ["tv_embedded"], ["android_vr"], ["ios"], ["android"]
     ] if platform == "youtube" else [None]
 
-    for ydl_fmt in formats_to_try:
-        for client in clients:
+    for client in clients:
+        for ydl_fmt in formats_to_try:
             try:
                 opts = make_opts(platform=platform, client=client, extra={
                     "format": ydl_fmt,
@@ -313,6 +327,8 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
                     "progress_hooks": [lambda d: _progress_hook(d,job_id)],
                     "postprocessors": [],
                     "merge_output_format": None,
+                    "check_formats": False,
+                    "no_check_certificate": True,
                 })
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=True)
@@ -327,7 +343,7 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
                     return
             except Exception as e:
                 err = str(e)
-                print(f"⚠️  fmt={ydl_fmt[:20]} client={client}: {err[:60]}")
+                print(f"⚠️  client={client} fmt={ydl_fmt[:15]}: {err[:60]}")
                 if "private" in err.lower():
                     progress_store[job_id].update({"status":"error","error":"❌ This video is private."})
                     return
@@ -335,7 +351,7 @@ def _worker(job_id, url, resolution, fmt_ext, audio_only, platform):
 
     progress_store[job_id].update({
         "status":"error",
-        "error":"❌ YouTube download failed. Please try again in 1 minute."
+        "error":"❌ YouTube is blocking downloads from this server. Please try again in 2 minutes."
     })
 
 # ── 3. Progress ──
